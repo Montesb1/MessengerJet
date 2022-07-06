@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>
+            Quick Chat
+        </title>
+        <link href="style.css" rel="stylesheet" type="text/css" />
+      </head>
+    <body>
+        <script type="module" src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"></script>
+        <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
+        <script type="module">
+            import { initializeApp } from "https://www.gstatic.com/firebasejs/9.8.4/firebase-app.js";
+            import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/9.8.4/firebase-auth.js";
+            import { getDatabase, ref, set, push, onChildAdded, remove, onChildRemoved, child, get } from "https://www.gstatic.com/firebasejs/9.8.4/firebase-database.js";
+
+            const firebaseConfig = {
+                apiKey: "AIzaSyAaU_5UhR7h_nFnuSCYbu9yhzpLRKngKvo",
+                authDomain: "messengerjet.firebaseapp.com",
+                projectId: "messengerjet",
+                storageBucket: "messengerjet.appspot.com",
+                messagingSenderId: "846849730500",
+                appId: "1:846849730500:web:df6401b43af249638e2691"
+            };
+
+            // Initialize Firebase
+            const app = initializeApp(firebaseConfig);
+            const db = getDatabase();
+            var username = "";
+            var loggedIn = false;
+            var messageBox = document.getElementById("messageBox");
+            const messages = document.getElementById("messages");
+            var chat = "";
+
+            const auth = getAuth();
+            messageBox.insertAdjacentHTML('beforeBegin',
+            `<div id="login-container" class="login-container">
+            <h2>Login/Signup</h2>
+            <input class="input" id="email" type="type" placeholder="Enter Email" style="width: 320px;">
+            <input class="input" id="password" type="password" placeholder="Enter Password" style="width: 320px;">
+            <button id="login" class="login">Login/Signup</button>
+            </div>`
+            );
+            messageBox.disabled = true;
+
+            function login(){
+                var userLogged = "";
+                var email = document.getElementById("email").value;
+                var password = document.getElementById("password").value;
+                document.getElementById("login-container").remove();
+                signInWithEmailAndPassword(auth, email, password)
+                    .then((userCredential) => {
+                        console.log("Signing in...");
+                        const user = userCredential.user;
+                        userLogged = user.uid;
+
+                        get(ref(db, "users/"+user.uid)).then((snapshot)=>{
+                            username = snapshot.val().username;
+                        }).catch((error)=>{
+                            console.log(error);
+                        });
+                        loggedIn = true;
+                        messageBox.disabled = false;
+                        chooseChat();
+                    })
+                    .catch((error) => {
+                        createUserWithEmailAndPassword(auth, email, password)
+                            .then((userCredential) => {
+                                console.log("Signing up...");
+                                const user = userCredential.user;
+                                var username = prompt("What is your username?");
+                                set(ref(db, "users/"+user.uid), {
+                                    "username": username
+                                }).then(()=>{
+                                    loggedIn = true;
+                                    console.log(username);
+                                    window.location.reload();
+                                }).catch((error)=>{
+                                    console.log(error);
+                                });
+                                
+                            })
+                            .catch((error) => {
+                                const errorCode = error.code;
+                                const errorMessage = error.message;
+                                console.log(errorCode, errorMessage);
+                                window.alert(errorCode);
+                            });
+                    });
+                }
+                var loginButton = document.getElementById("login");
+                loginButton.addEventListener("click", login);
+
+                function chooseChat(){
+                    console.log("running");
+                    var createChatButton = document.getElementById("createchat");
+                    createChatButton.addEventListener("click", ()=>{
+                        messageBox.insertAdjacentHTML('beforeBegin',
+                    `<div class="login-container">
+                    <h2>Create Chat</h2>
+                    <input id="chatname" type="text" placeholder="Enter Chat Name" style="width: 320px;">
+                    <input id="password" type="password" placeholder="Enter Chat Password" style="width: 320px;">
+                    <button id="chatLogin" class="login">Create Chat</button>
+                    </div>`
+                    );
+                    console.log(document.getElementById("chatLogin"));
+                    document.getElementById("chatLogin").addEventListener("click", ()=>{
+                        var inputChatName = document.getElementById("chatname").value;
+                        var inputPassword = document.getElementById("password").value;
+                        set(ref(db, "chats/"+inputChatName), {
+                            "chatname":inputChatName,
+                            "chatpassword":inputPassword
+                        });
+                        messages.innerHTML = "";
+                        createChatButton.remove();
+                        document.querySelector(".login-container").remove();
+                        chat = inputChatName;
+                        start();
+                        return;
+                    });
+                    });
+                    
+                    get(ref(db, "chats")).then((snapshot)=>{
+
+                        
+                        snapshot.forEach((child)=>{
+                            var html = "";
+                            var childName = child.val().chatname;
+                            var childPassword = child.val().chatpassword;
+                            console.log(childName);
+                            html += `
+                            <li class="message">
+                                <div class="chat-login-container">
+                                    <h3>${childName}</h3>
+                                    <input type="hidden" class="childname" value="${childName}">
+                                    <input type="hidden" class="childpassword" value="${childPassword}">
+                                    <input id="${childName}-input" class="password" type="password" placeholder="Enter Chat Password">
+                                    <button id="${childName}-button" class="login" style="position: relative; left: 6px">Enter</button>
+                                </div>
+                            </li>
+                            `;
+                            messages.innerHTML += html;
+                            var button = document.getElementById(childName+"-button");
+                            var passwordInput = document.getElementById(childName+"-input");
+                            button.addEventListener("click", ()=>{
+                                
+                            });
+                        });
+                        const chatLoginContainers = document.querySelectorAll('.chat-login-container');
+                        chatLoginContainers.forEach((element)=>{
+                            const loginBtn = element.querySelector('.login');
+                            loginBtn.addEventListener('click', (event) => {
+                                const childNameEle = event.target.closest('li').querySelector('.childname');
+                                const childPasswordEle = event.target.closest('li').querySelector('.childpassword');
+                                const passwordEle = event.target.closest('li').querySelector('.password');
+                                const childNameVal = childNameEle.value;
+                                const childPasswordVal = childPasswordEle.value;
+                                const passwordVal = passwordEle.value;
+                                get(ref(db, "chats/" + childNameVal)).then((snapshot) => {
+                                    if (passwordVal == childPasswordVal) {
+                                        chat = childNameVal;
+                                        console.log("Logging in to " + childNameVal);
+                                        messages.innerHTML = "";
+                                        createChatButton.remove();
+                                        start();
+                                    } else {
+                                        window.alert("Incorrect password, please try again");
+                                    }
+                                }).catch((error) => {
+                                    console.log(error);
+                                });
+                            });
+                        });
+
+                    }).catch((error)=>{
+                        console.log(error);
+                    });                  
+                }
+
+
+                function buttonLogin(){
+                    get(ref(db, "chats/"+childName)).then((snapshot) =>{
+                                    if(passwordInput==childPassword){
+                                        chat = childName;
+                                        console.log("Logging in to "+childName);
+                                        messages.innerHTML = "";
+                                        start();
+                                    }else{
+                                        window.alert("Incorrect password, please try again");
+                                    }
+                                }).catch((error)=>{
+                                    console.log(error);
+                                });
+                }
+
+                function start(){
+                    function writeUserData(message) {
+                        if(!message.trim()==""){
+                            messageBox.value = "";
+                            push(ref(db, "chats/"+chat+"/messages"), {
+                                "sender": username,
+                                "message": message
+                            });
+                        }
+                    }
+                    var button = document.getElementById("button");
+                    button.addEventListener("click", () =>{
+                        writeUserData(messageBox.value.replace(/\n\r?/g, '<br />'));
+                    });
+
+                    messageBox.addEventListener("keydown", function (event) {
+                        if (event.keyCode == 13 && !event.shiftKey) {
+                            writeUserData(messageBox.value.replace(/\n\r?/g, '<br />'));
+                            event.preventDefault();
+                        }else if(event.keyCode == 13 && event.shiftKey){
+                            messageBox.innerText = messageBox.innerText + '\n';
+                            console.log(messageBox.innerText);
+                        }
+                    });
+
+                    onChildAdded(ref(db, "chats/"+chat+"/messages"), (snapshot) =>{
+                        var html = "";
+                        html += '<li class="username">'+snapshot.val().sender + ':</li>'
+                        html += '<li class="message" id="'+snapshot.key+'">';
+                        html +=  snapshot.val().message;
+                        html += '</li>'
+                        messages.innerHTML += html;
+                        if(snapshot.val().sender===username){
+                            var deleteBtn = "";
+                            var pos = document.getElementById(snapshot.key);
+                            deleteBtn += '<li class="delete-container" style="position: absolute; top:'+(pos.offsetTop+(pos.offsetHeight/2)-10)+'px; left: '+(pos.offsetWidth+pos.offsetLeft+15)+'px;">';
+                            deleteBtn += '<button class="deleteMessage" data-id="'+snapshot.key+'">Delete</button>';
+                            deleteBtn += '</li>';
+                            messages.innerHTML += deleteBtn;
+                        }
+                        
+                        
+                        var container = document.getElementById("message-container");
+                        container.scrollTop = container.scrollHeight - container.clientHeight;
+                        var deleteButton = document.querySelectorAll(".deleteMessage");
+                    deleteButton.forEach(button =>{
+                        button.addEventListener('click', (e) =>{
+                            deleteMessage(e.target);
+                        });
+                    });
+                    });
+
+                    var clearChatButton = document.getElementById("clearChat");
+                    clearChatButton.addEventListener("click", clearChat);
+
+                    var imgButton = document.querySelector(".img");
+                    imgButton.addEventListener("click", e =>{
+                        var imgLink = '<img src="'+prompt("Image Link:")+'">';
+                        writeUserData(imgLink);
+                    });
+
+                    var linkButton = document.querySelector(".link");
+                    linkButton.addEventListener("click", e =>{
+                        var link = '<a href="'+prompt("Link:")+'">'+prompt("Link Displayed Text:")+'</a>';
+                        writeUserData(link);
+                    });
+
+                    
+
+                    function deleteMessage(self){
+                        var messageId = self.getAttribute("data-id");
+                        remove(child(ref(db, "chats/"+chat+"/messages"), messageId));
+                        document.querySelector('[data-id="'+messageId+'"]').remove();
+                    }
+
+                    onChildRemoved(ref(db, "chats/"+chat+"/messages"), (snapshot) => {
+                        document.getElementById(snapshot.key).innerHTML = "This message has been deleted";
+                    });
+
+                    function clearChat(){
+                        set(ref(db, "chats/"+chat+"/messages"), {
+                            
+                        });
+                        const messages = document.getElementById("messages");
+                        messages.innerHTML = "";
+                    }
+                    }
+                
+                    
+                
+
+                const toggleSwitch = document.querySelector('.theme-switch input[type="checkbox"]');
+
+                function switchTheme(e) {
+                    if (e.target.checked) {
+                        document.documentElement.setAttribute('data-theme', 'light');
+                    }
+                    else {
+                        document.documentElement.setAttribute('data-theme', 'dark');
+                    }    
+            }
+
+toggleSwitch.addEventListener('change', switchTheme, false);
+
+        </script>
+        <textarea type="text" rows="1" id="messageBox" placeholder="Enter Message"></textarea>
+        <button id="button" class="send" tooltip="Send">
+            <ion-icon name="send"></ion-icon>
+        </button>
+        <button id="clearChat" class="clearChat">Clear Chat</button>
+        <button class="img" tooltip="Send Image">
+            <ion-icon name="image-outline"></ion-icon>
+        </button>
+        <button class="link" tooltip="Send Link">
+            <ion-icon name="link"></ion-icon>
+        </button>
+        <div class="theme-switch-wrapper">
+          <label class="theme-switch" for="checkbox">
+              <input type="checkbox" id="checkbox" />
+              <div class="slider round"></div>
+          </label>
+        </div>
+        <div id="message-container" class="message-container">
+            <button id="createchat" class="login">Create Chat</button>
+            <ul id="messages">
+                
+            </ul>
+        </div>
+        
+    </body>
+</html>
